@@ -75,7 +75,7 @@ Renovate is what actually proposes the remediations. Its configuration is in
 {
   "extends": [
     "config:recommended",
-    "github>lightwell-experience/renovate-config:java-remediated#1.0.0"
+    "github>lightwell-experience/renovate-config:java-remediated#1.0.2"
   ],
   "packageRules": [
     {
@@ -91,14 +91,69 @@ Renovate is what actually proposes the remediations. Its configuration is in
 ```
 
 - **`config:recommended`**: Renovate's standard baseline preset.
-- **`github>lightwell-experience/renovate-config:java-remediated#1.0.0`**: The
-  shared Lightwell preset for Java projects, pinned to tag `1.0.0`. It teaches
+- **`github>lightwell-experience/renovate-config:java-remediated#1.0.2`**: The
+  shared Lightwell preset for Java projects, pinned to tag `1.0.2`. It teaches
   Renovate how to find and propose Lightwell-remediated (`rhlw`) versions of
   Maven dependencies.
 - **`packageRules`**: Overrides the registry the preset's `custom.regex`
   manager uses for Maven lookups. It points to the **public demo** remediated
   repository instead of the default Lightwell registry, so the demo works
   without authentication. This is the same URL used in `.mvn/settings.xml`.
+
+### Transitive dependencies
+
+The preset's `custom.regex` manager only sees dependencies written in
+`pom.xml` with a literal `<groupId>`/`<artifactId>`/`<version>`. Renovate's
+built-in Maven manager is disabled. Transitive dependencies, such as the Spring
+Framework modules that `spring-boot-starter-parent` manages, are invisible to
+Renovate, so it never proposes their rebuilds.
+
+To fix that, `pom.xml` pins the affected transitive dependencies in
+`<dependencyManagement>` at their **upstream** version:
+
+| Dependency                              | Pinned at | Rebuild Renovate proposes |
+|-----------------------------------------|-----------|---------------------------|
+| `org.springframework:spring-core`       | `5.3.18`  | `5.3.18.rhlw-00010`       |
+| `org.springframework:spring-expression` | `5.3.18`  | `5.3.18.rhlw-00010`       |
+| `org.springframework:spring-webmvc`     | `5.3.18`  | `5.3.18.rhlw-00010`       |
+
+The pins match what Boot 2.6.6 already resolves, so they don't change the
+build. They only give Renovate something to match, so it opens remediation PRs
+for these artifacts as it does for direct dependencies.
+
+These three were found with
+[`scripts/pin-transitives.mjs`](https://github.com/lightwell-experience/renovate-config/blob/main/scripts/pin-transitives.mjs)
+from the `lightwell-experience/renovate-config` repo. It's the approach
+described in
+[Manage Java transitive dependencies with Lightwell rebuilds](https://developers.redhat.com/articles/2026/11/03/manage-java-transitive-dependencies-lightwell-rebuilds).
+The script resolves the full Maven dependency tree, runs a local Renovate
+dry-run lookup against it, and reports every dependency, direct or transitive,
+that has an `rhlw` rebuild. Of 53 resolved dependencies, these were the only
+transitive ones with rebuilds. Run it from the project root:
+
+```bash
+git clone https://github.com/lightwell-experience/renovate-config /tmp/renovate-config
+(cd /tmp/renovate-config && npm install --no-save renovate@42)
+
+node /tmp/renovate-config/scripts/pin-transitives.mjs \
+  --mvn "mvn -B -Dstyle.color=never org.apache.maven.plugins:maven-dependency-plugin:3.8.1:tree -DoutputType=json -DoutputFile=/tmp/dependency-tree.json" \
+  --renovate 'LOG_FORMAT=json /tmp/renovate-config/node_modules/.bin/renovate --platform=local --onboarding=false --dry-run=lookup > "$RENOVATE_LOG_FILE"'
+```
+
+The extra flags work around three issues:
+
+- **`--mvn`:** Spring Boot 2.6.6 pins `maven-dependency-plugin` 3.2.0, which
+  can't write a JSON tree (that needs 3.7.0+). The flag calls 3.8.1 explicitly.
+- **`renovate@42`:** Renovate 43+ requires Node 24. Version 42 still runs on
+  Node 22. On Node 24 you can use the default install instead.
+- **`--renovate`:** Renovate 42 ignores `RENOVATE_LOG_FILE`, so the command
+  writes JSON logs to stdout and redirects them into the file the script reads.
+
+> **When upgrading Spring Boot**, update these pins to the new Boot version's
+> Spring Framework version, then rerun the script. Otherwise
+> `<dependencyManagement>` keeps forcing Spring Framework 5.3.18 under the
+> newer Boot. Rerun the script from time to time anyway, to catch transitive
+> dependencies that get new rebuilds later.
 
 ### Running Renovate
 
