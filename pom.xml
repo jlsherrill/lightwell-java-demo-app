@@ -23,6 +23,31 @@
         <java.version>17</java.version>
     </properties>
 
+    <!--
+      Transitive Spring Framework modules (managed by spring-boot-starter-parent) pinned here
+      so the Lightwell Renovate preset can see them and propose rhlw rebuilds.
+      Keep these in sync with the Spring Framework version of the Boot parent when upgrading Boot.
+    -->
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework</groupId>
+                <artifactId>spring-core</artifactId>
+                <version>5.3.18</version>
+            </dependency>
+            <dependency>
+                <groupId>org.springframework</groupId>
+                <artifactId>spring-expression</artifactId>
+                <version>5.3.18</version>
+            </dependency>
+            <dependency>
+                <groupId>org.springframework</groupId>
+                <artifactId>spring-webmvc</artifactId>
+                <version>5.3.18</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
     <dependencies>
         <!-- Spring Boot starters (Boot 2.6.6 -> Spring Framework 5.3.18, Spring Security 5.6.2) -->
         <dependency>
